@@ -1,5 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+
 #include "GAM312Character.h"
 #include "GAM312Projectile.h"
 #include "Animation/AnimInstance.h"
@@ -11,6 +12,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "MotionControllerComponent.h"
 #include "XRMotionControllerBase.h" // for FXRMotionControllerBase::RightHandSourceId
+#include "Engine.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -136,6 +138,10 @@ void AGAM312Character::SetupPlayerInputComponent(class UInputComponent* PlayerIn
 	PlayerInputComponent->BindAxis("TurnRate", this, &AGAM312Character::TurnAtRate);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &AGAM312Character::LookUpAtRate);
+
+	//Bind Linetrace/Raycast input event
+	PlayerInputComponent->BindAction("Draw_Debug", IE_Pressed, this, &AGAM312Character::DisplayRaycast);
+
 }
 
 void AGAM312Character::OnFire()
@@ -216,6 +222,37 @@ void AGAM312Character::EndTouch(const ETouchIndex::Type FingerIndex, const FVect
 	TouchItem.bIsPressed = false;
 }
 
+void AGAM312Character::DisplayRaycast()
+{
+	//instantiate new FHitresult object
+	FHitResult* hitresult = new FHitResult();
+	//Set Start Trace from first person camera's location
+	FVector StartTrace = FirstPersonCameraComponent->GetComponentLocation();
+	//Set Forward vector of camera component
+	FVector ForwardVector = FirstPersonCameraComponent->GetForwardVector();
+	//Set End trace multiplied by 3319.f and send to start trace and end trace
+	FVector EndTrace = ((ForwardVector * 3319.f) + StartTrace);
+	//Set up some collision parameters and instantiate a new FCollisionQueryParams object
+	FCollisionQueryParams* TraceParams = new FCollisionQueryParams();
+
+	//This is like after breaking hit results in blueprints, we create a conditional statement
+	if (GetWorld()->LineTraceSingleByChannel(*hitresult, StartTrace, EndTrace,
+		ECC_Visibility, *TraceParams))
+	{
+		DrawDebugLine(GetWorld(), StartTrace, EndTrace, FColor(255, 0, 0), true);
+		if (hitresult->GetActor())
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("You hit: %s"),
+				*hitresult->Actor->GetName()));
+		}
+		else
+		{
+			// Display message in 5, for 5 seconds
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, "Something else");
+		}
+	}
+	
+}
 //Commenting this section out to be consistent with FPS BP template.
 //This allows the user to turn without using the right virtual joystick
 
