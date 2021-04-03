@@ -9,6 +9,11 @@ AAI_Bot_Character::AAI_Bot_Character()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationRoll = false;
+
 	//set orient rotation bool to true in character movement
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	//character orients itself in direction of it's motion
