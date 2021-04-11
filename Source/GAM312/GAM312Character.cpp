@@ -406,7 +406,7 @@ FText AGAM312Character::GetHealthIntText()
 
 FText AGAM312Character::GetMagicIntText()
 {
-	int32 MP = FMath::RoundHalfFromZero(HealthPercentage * 100);
+	int32 MP = FMath::RoundHalfFromZero(MagicPercentage * 100);
 	FString MPS = FString::FromInt(MP);
 	FString FullMPS = FString::FromInt(FullMagic);
 	//convert string to ftext

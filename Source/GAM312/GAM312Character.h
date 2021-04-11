@@ -212,7 +212,7 @@ public:
 	UFUNCTION()
 	void DamageTimer();
 	
-	//declare setters for DamgeState and MagicValue, MagicState, and MagicChange
+	//declare setters for DamgeState and MagicValue, MagicState
 	UFUNCTION()
 	void SetDamageState();
 	UFUNCTION()
