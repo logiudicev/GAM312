@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Components/TimelineComponent.h"
 #include "GAM312Character.generated.h"
 
 class UInputComponent;
@@ -50,6 +51,8 @@ public:
 
 protected:
 	virtual void BeginPlay();
+	//override tick function declaration
+	virtual void Tick(float DeltaTime) override;
 
 public:
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
@@ -83,6 +86,10 @@ public:
 	//Pointer for Camera ; This was omitted from the tutorial. You must specify the pointer for Camera Director.
 	UPROPERTY(EditAnywhere)
 	AActor* CameraDirector;
+
+	//void SetCanBeDamaged(bool bInCanBeDamaged);
+	UPROPERTY()
+	bool bInCanBeDamaged;
 
 protected:
 	
@@ -135,12 +142,113 @@ protected:
 	 * @returns true if touch controls were enabled.
 	 */
 	bool EnableTouchscreenMovement(UInputComponent* InputComponent);
+	
+	
+	
 
 public:
 	/** Returns Mesh1P subobject **/
 	FORCEINLINE class USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+	//declare variables for UI/HUD functionality
+	//declare float variable FullHealth, HealthPercentage
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	float FullHealth;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	float Health;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	float HealthPercentage;
+	//declare Magic Variables
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	float FullMagic;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	float Magic;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	float MagicPercentage;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	float PreviousMagic;
+	//float Magic for how much we're using
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	float MagicValue;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool redFlash;
+	//smoothly transition between two values
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Magic")
+	UCurveFloat *MagicCurve;
+	//Timeline
+	UPROPERTY(EditAnywhere, Category = "Magic")
+	UTimelineComponent* MyTimeline;
+	//Declare timer handle to clear/stop referenced timers (2 seconds to determine interval when you can shoot)
+	UPROPERTY(EditAnywhere, Category = "Magic")
+	struct FTimerHandle MemberTimerHandle;
+	//Will be used for 5 seconds wait time before magic bar refills
+	UPROPERTY(EditAnywhere, Category = "Magic")
+	struct FTimerHandle MagicTimerHandle;
+
+	float CurveFloatValue;
+	float TimelineValue;
+	UPROPERTY(EditAnywhere, Category = "Magic")
+	bool bCanUseMagic;
+
+	//what we bind to our UI Element to determine how percent health is shown in health bar
+	UFUNCTION(BlueprintPure, Category = "Health")
+	float GetHealth();
+	
+	//return percentage of number of text value so UI can read it
+	UFUNCTION(BlueprintPure, Category = "Health")
+	FText GetHealthIntText();
+
+	//what we bind to our UI Element to determine how percent Magic is shown in health bar
+	UFUNCTION(BlueprintPure, Category = "Magic")
+	float GetMagic();
+
+	//return percentage of number of text value so UI can read it in Magic
+	UFUNCTION(BlueprintPure, Category = "Magic")
+	FText GetMagicIntText();
+	
+	//2 second start for invincibility
+	UFUNCTION()
+	void DamageTimer();
+	
+	//declare setters for DamgeState and MagicValue, MagicState, and MagicChange
+	UFUNCTION()
+	void SetDamageState();
+	UFUNCTION()
+	void SetMagicValue();
+	UFUNCTION()
+	void SetMagicState();
+	
+	//SET MagicValue of MagicValue being passed through
+	UFUNCTION()
+	void SetMagicChange(float MagicChange);
+
+	UFUNCTION()
+	void UpdateMagic();
+
+	//function to determine whether or not to play red flash animation
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool PlayFlash();
+	
+	//declare classes for GunDefault material and GunOverheat material
+	UPROPERTY(EditAnyWhere, Category = "Magic")
+	class UMaterialInterface* GunDefaultMaterial;
+
+	UPROPERTY(EditAnyWhere, Category = "Magic")
+	class UMaterialInterface* GunOverheatMaterial;
+
+	//Receive point damage function declaration
+	//UFUNCTION()
+	//void TakePointDamage(float Damage, const UDamageType* DamageType, FVector HitLocation,
+		//FVector HitNormal, UPrimitiveComponent* HitComponent, FName BoneNAme, FVector ShotFromDirection,
+		//AController	* InstigatedBy, AActor* DamageCauser, const FHitResult& HitInfo);
+
+	// void ReceivePointDamage(float Damage, const class UDamageType * DamageType, FVector HitLocation, FVector HitNormal, class UPrimitiveComponent * HitComponent, FName BoneName, FVector ShotFromDirection, class AController * InstigatedBy, AActor * DamageCauser, const FHitResult & HitInfo);
+	UFUNCTION(BlueprintCallable, Category = "Power")
+	void UpdateHealth(float HealthChange);
+
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser);
 
 private:
 	void DisplayRaycast();

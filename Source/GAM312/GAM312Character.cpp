@@ -10,10 +10,13 @@
 #include "GameFramework/InputSettings.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "MotionControllerComponent.h"
 #include "XRMotionControllerBase.h" // for FXRMotionControllerBase::RightHandSourceId
 #include "Engine.h"
-
+#include "TimerManager.h"
+#include "Components/TimelineComponent.h"
+#include "GameFramework/Actor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -92,6 +95,38 @@ void AGAM312Character::BeginPlay()
 	// Call the base class  
 	Super::BeginPlay();
 
+
+	FullHealth = 1000.0f;
+	Health = FullHealth;
+	HealthPercentage = 1.0f;
+	AGAM312Character::bInCanBeDamaged = true;
+
+	FullMagic = 100.0f;
+	Magic = FullMagic;
+	MagicPercentage = 1.0f;
+	PreviousMagic = MagicPercentage;
+	MagicValue = 0.0f;
+	bCanUseMagic = true;
+
+	//if MagicCurve is true we'll drag in editor to apply to character
+	if (MagicCurve)
+	{
+		//Timeline will run set magic value each iteration of the timeline, then runs callback
+		FOnTimelineFloat TimelineCallback;
+		FOnTimelineEventStatic TimelineFinishedCallback;
+
+		TimelineCallback.BindUFunction(this, FName("SetMagicValue"));
+		TimelineFinishedCallback.BindUFunction(this, FName("SetMagicState"));
+
+		MyTimeline = NewObject<UTimelineComponent>(this, FName("Magic Animation"));
+		MyTimeline->AddInterpFloat(MagicCurve, TimelineCallback);
+		MyTimeline->SetTimelineFinishedFunc(TimelineFinishedCallback);
+		MyTimeline->RegisterComponent();
+	}
+
+
+
+
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	FP_Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
 
@@ -106,6 +141,13 @@ void AGAM312Character::BeginPlay()
 		VR_Gun->SetHiddenInGame(true, true);
 		Mesh1P->SetHiddenInGame(false, true);
 	}
+}
+
+void AGAM312Character::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (MyTimeline != nullptr) MyTimeline->TickComponent(DeltaTime, ELevelTick::LEVELTICK_TimeOnly, nullptr);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -147,8 +189,8 @@ void AGAM312Character::SetupPlayerInputComponent(class UInputComponent* PlayerIn
 
 void AGAM312Character::OnFire()
 {
-	// try and fire a projectile
-	if (ProjectileClass != NULL)
+	// try and fire a projectile  Update, can fire if magic is above 0.001f and canusemagic true
+	if (ProjectileClass != NULL && !FMath::IsNearlyZero(Magic, 0.001f) && bCanUseMagic)
 	{
 		UWorld* const World = GetWorld();
 		if (World != NULL)
@@ -173,23 +215,27 @@ void AGAM312Character::OnFire()
 				World->SpawnActor<AGAM312Projectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
 			}
 		}
-	}
-
-	// try and play the sound if specified
-	if (FireSound != NULL)
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
-	}
-
-	// try and play a firing animation if specified
-	if (FireAnimation != NULL)
-	{
-		// Get the animation object for the arms mesh
-		UAnimInstance* AnimInstance = Mesh1P->GetAnimInstance();
-		if (AnimInstance != NULL)
+		// try and play the sound if specified
+		if (FireSound != NULL)
 		{
-			AnimInstance->Montage_Play(FireAnimation, 1.f);
+			UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
 		}
+
+		// try and play a firing animation if specified
+		if (FireAnimation != NULL)
+		{
+			// Get the animation object for the arms mesh
+			UAnimInstance* AnimInstance = Mesh1P->GetAnimInstance();
+			if (AnimInstance != NULL)
+			{
+				AnimInstance->Montage_Play(FireAnimation, 1.f);
+			}
+		}
+
+		if (MyTimeline != nullptr) MyTimeline->Stop();
+		GetWorldTimerManager().ClearTimer(MagicTimerHandle);
+		SetMagicChange(-20.0f);
+		GetWorldTimerManager().SetTimer(MagicTimerHandle, this, &AGAM312Character::UpdateMagic, 5.0f, false);
 	}
 }
 
@@ -257,40 +303,40 @@ void AGAM312Character::DisplayRaycast()
 //Commenting this section out to be consistent with FPS BP template.
 //This allows the user to turn without using the right virtual joystick
 
-//void AGAM312Character::TouchUpdate(const ETouchIndex::Type FingerIndex, const FVector Location)
-//{
-//	if ((TouchItem.bIsPressed == true) && (TouchItem.FingerIndex == FingerIndex))
-//	{
-//		if (TouchItem.bIsPressed)
-//		{
-//			if (GetWorld() != nullptr)
-//			{
-//				UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport();
-//				if (ViewportClient != nullptr)
-//				{
-//					FVector MoveDelta = Location - TouchItem.Location;
-//					FVector2D ScreenSize;
-//					ViewportClient->GetViewportSize(ScreenSize);
-//					FVector2D ScaledDelta = FVector2D(MoveDelta.X, MoveDelta.Y) / ScreenSize;
-//					if (FMath::Abs(ScaledDelta.X) >= 4.0 / ScreenSize.X)
-//					{
-//						TouchItem.bMoved = true;
-//						float Value = ScaledDelta.X * BaseTurnRate;
-//						AddControllerYawInput(Value);
-//					}
-//					if (FMath::Abs(ScaledDelta.Y) >= 4.0 / ScreenSize.Y)
-//					{
-//						TouchItem.bMoved = true;
-//						float Value = ScaledDelta.Y * BaseTurnRate;
-//						AddControllerPitchInput(Value);
-//					}
-//					TouchItem.Location = Location;
-//				}
-//				TouchItem.Location = Location;
-//			}
-//		}
-//	}
-//}
+void AGAM312Character::TouchUpdate(const ETouchIndex::Type FingerIndex, const FVector Location)
+{
+	if ((TouchItem.bIsPressed == true) && (TouchItem.FingerIndex == FingerIndex))
+	{
+		if (TouchItem.bIsPressed)
+		{
+			if (GetWorld() != nullptr)
+			{
+				UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport();
+				if (ViewportClient != nullptr)
+				{
+					FVector MoveDelta = Location - TouchItem.Location;
+					FVector2D ScreenSize;
+					ViewportClient->GetViewportSize(ScreenSize);
+					FVector2D ScaledDelta = FVector2D(MoveDelta.X, MoveDelta.Y) / ScreenSize;
+					if (FMath::Abs(ScaledDelta.X) >= 4.0 / ScreenSize.X)
+					{
+						TouchItem.bMoved = true;
+						float Value = ScaledDelta.X * BaseTurnRate;
+						AddControllerYawInput(Value);
+					}
+					if (FMath::Abs(ScaledDelta.Y) >= 4.0 / ScreenSize.Y)
+					{
+						TouchItem.bMoved = true;
+						float Value = ScaledDelta.Y * BaseTurnRate;
+						AddControllerPitchInput(Value);
+					}
+					TouchItem.Location = Location;
+				}
+				TouchItem.Location = Location;
+			}
+		}
+	}
+}
 
 void AGAM312Character::MoveForward(float Value)
 {
@@ -335,4 +381,106 @@ bool AGAM312Character::EnableTouchscreenMovement(class UInputComponent* PlayerIn
 	}
 	
 	return false;
+}
+
+//bind to UI element so UI element can check every tick and update health bar percentage
+float AGAM312Character::GetHealth()
+{
+	return HealthPercentage;
+}
+//bind to UI element so UI element can check every tick and update magic bar percentage
+float AGAM312Character::GetMagic()
+{
+	return MagicPercentage;
+}
+
+FText AGAM312Character::GetHealthIntText()
+{
+	int32 HP = FMath::RoundHalfFromZero(HealthPercentage * 100);
+	FString HPS = FString::FromInt(HP);
+	//convert string to ftext
+	FString HealthHUD = HPS + FString(TEXT("%"));
+	FText HPText = FText::FromString(HealthHUD);
+	return HPText;
+}
+
+FText AGAM312Character::GetMagicIntText()
+{
+	int32 MP = FMath::RoundHalfFromZero(HealthPercentage * 100);
+	FString MPS = FString::FromInt(MP);
+	FString FullMPS = FString::FromInt(FullMagic);
+	//convert string to ftext
+	FString MagicHUD = MPS + FString(TEXT("/")) + FullMPS;
+	FText MagicText = FText::FromString(MagicHUD);
+	return MagicText;
+}
+void AGAM312Character::SetDamageState()
+{
+	
+	bInCanBeDamaged = true;
+}
+
+void AGAM312Character::DamageTimer()
+{
+	GetWorldTimerManager().SetTimer(MemberTimerHandle, this, &AGAM312Character::SetDamageState, 2.0f, false);
+}
+
+void AGAM312Character::SetMagicValue()
+{
+	TimelineValue = MyTimeline->GetPlaybackPosition();
+	CurveFloatValue = PreviousMagic + MagicValue * MagicCurve->GetFloatValue(TimelineValue);
+	Magic = FMath::Clamp(CurveFloatValue * FullHealth, 0.0f, FullMagic);
+	MagicPercentage = FMath::Clamp(CurveFloatValue, 0.0f, 1.0f);
+}
+
+void AGAM312Character::SetMagicState()
+{
+	bCanUseMagic = true;
+	MagicValue = 0.0;
+	if (GunDefaultMaterial) FP_Gun->SetMaterial(0, GunDefaultMaterial);
+}
+
+bool AGAM312Character::PlayFlash()
+{
+	if (redFlash)
+	{
+		redFlash = false;
+		return true;
+	}
+
+	return false;
+}
+
+float AGAM312Character::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	bInCanBeDamaged = false;
+	redFlash = true;
+	UpdateHealth(-DamageAmount);
+	DamageTimer();
+	return DamageAmount;
+}
+
+void AGAM312Character::UpdateHealth(float HealthChange)
+{
+	Health = FMath::Clamp(Health += HealthChange, 0.0f, FullHealth);
+	HealthPercentage = Health / FullHealth;
+}
+
+void AGAM312Character::UpdateMagic()
+{
+	PreviousMagic = MagicPercentage;
+	MagicPercentage = Magic / FullMagic;
+	MagicValue = 1.0f;
+	if (MyTimeline != nullptr) MyTimeline->PlayFromStart();
+}
+
+void AGAM312Character::SetMagicChange(float MagicChange)
+{
+	bCanUseMagic = false;
+	PreviousMagic = MagicPercentage;
+	MagicValue = (MagicChange / FullMagic);
+
+	if (GunOverheatMaterial) FP_Gun->SetMaterial(0, GunOverheatMaterial);
+
+	if (MyTimeline != nullptr) MyTimeline->PlayFromStart();
 }
